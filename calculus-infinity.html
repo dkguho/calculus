@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinity Graph</title>
+    <style>
+        /* 1. INFINITY THEME */
+        :root {
+            --bg: radial-gradient(circle at center, #1a1a2e 0%, #16213e 100%);
+            --card-bg: rgba(255, 255, 255, 0.1);
+            --text: #ffffff;
+            --accent: #f50057; /* Hot Pink/Red for Intensity */
+            --safe: #00d2ff;   /* Blue for safe zone */
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            box-sizing: border-box;
+            color: var(--text);
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            padding: 25px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 { margin: 0; font-weight: 300; letter-spacing: 2px; }
+        p { color: #a8b2d1; font-size: 0.9rem; margin-bottom: 20px; }
+
+        /* 2. READABLE EQUATION */
+        .equation-box {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 25px;
+            border-radius: 50px;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            font-family: 'Times New Roman', serif;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .fraction {
+            display: inline-block;
+            text-align: center;
+            vertical-align: middle;
+            margin: 0 10px;
+        }
+        .top { border-bottom: 2px solid white; display: block; padding: 0 5px; }
+        .bottom { display: block; padding: 0 5px; }
+
+        /* 3. RESPONSIVE GRAPH CONTAINER */
+        .graph-wrapper {
+            position: relative;
+            width: 100%;
+            height: 350px; /* Fixed height */
+            background: #f8fafc; /* White paper look for graph */
+            border-radius: 15px;
+            overflow: hidden; /* IMPORTANT: Keeps graph inside */
+            margin-bottom: 20px;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* 4. REAL TIME DATA BOXES */
+        .metrics {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .box {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            transition: 0.3s;
+        }
+        
+        .box-label { font-size: 0.8rem; color: #a8b2d1; text-transform: uppercase; }
+        .box-val { font-size: 1.8rem; font-weight: bold; margin-top: 5px; }
+
+        /* 5. SLIDER */
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+            direction: rtl; /* FLIP SLIDER: Left is smaller (High Pressure), Right is Bigger */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Infinite Limit 🚀</h2>
+        <p>Squeeze the balloon (Make x smaller)</p>
+
+        <div class="equation-box">
+            <span>f(x) = </span>
+            <div class="fraction">
+                <span class="top">1</span>
+                <span class="bottom" id="eq-x" style="color: var(--safe)">x</span>
+            </div>
+            <span> = </span>
+            <span id="eq-result" style="margin-left: 10px; font-weight:bold;">?</span>
+        </div>
+
+        <div class="graph-wrapper" id="container">
+            <canvas id="graphCanvas"></canvas>
+            <div style="position: absolute; bottom: 10px; right: 10px; color: #333; font-weight: bold;">Size (x)</div>
+            <div style="position: absolute; top: 10px; left: 10px; color: #333; font-weight: bold;">Pressure (y)</div>
+        </div>
+
+        <div class="metrics">
+            <div class="box">
+                <div class="box-label">Balloon Size (x)</div>
+                <div class="box-val" id="val-x" style="color: var(--safe);">1.00</div>
+            </div>
+            <div class="box" id="pressure-box">
+                <div class="box-label">Pressure (y)</div>
+                <div class="box-val" id="val-y">1.00</div>
+            </div>
+        </div>
+
+        <p style="margin-bottom: 5px; font-size: 0.8rem;">Slide Left to Squeeze!</p>
+        <input type="range" id="slider" min="0.05" max="4" step="0.01" value="2">
+    </div>
+
+    <script>
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('container');
+        const slider = document.getElementById('slider');
+
+        // UI Elements
+        const valX = document.getElementById('val-x');
+        const valY = document.getElementById('val-y');
+        const eqX = document.getElementById('eq-x');
+        const eqResult = document.getElementById('eq-result');
+        const pressureBox = document.getElementById('pressure-box');
+
+        let width, height;
+
+        // --- 1. SETUP & RESIZE ---
+        function resize() {
+            const rect = container.getBoundingClientRect();
+            width = rect.width;
+            height = rect.height;
+            
+            // Retina display support
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            ctx.scale(dpr, dpr);
+
+            update(parseFloat(slider.value));
+        }
+
+        // --- 2. COORDINATE SYSTEM ---
+        // We want to show X from 0 to 4
+        // We want to show Y from 0 to 10 (visually)
+        function toScreen(x, y) {
+            const padding = 40;
+            const drawW = width - (padding * 2);
+            const drawH = height - (padding * 2);
+
+            // X Map: 0 -> 4
+            const px = padding + (x / 4) * drawW;
+            
+            // Y Map: 0 -> 10 (We cap visual height at 10 to allow shooting off screen)
+            const py = height - padding - (y / 10) * drawH;
+
+            return { x: px, y: py };
+        }
+
+        // --- 3. MAIN LOGIC ---
+        function update(x) {
+            // 1. Calculate Math
+            // The formula is y = 1 / x
+            let y = 1 / x;
+
+            // 2. Update Text UI (Real Time)
+            valX.innerText = x.toFixed(2);
+            eqX.innerText = x.toFixed(2);
+            
+            if (y > 50) { // Arbitrary "Huge" number
+                valY.innerText = "∞"; // Infinity Symbol
+                eqResult.innerText = "∞";
+                valY.style.color = "#f50057"; // Danger Red
+                pressureBox.style.background = "rgba(245, 0, 87, 0.2)";
+            } else {
+                valY.innerText = y.toFixed(2);
+                eqResult.innerText = y.toFixed(2);
+                valY.style.color = "#ffffff";
+                pressureBox.style.background = "rgba(255, 255, 255, 0.1)";
+            }
+
+            // 3. Draw Graph
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw Axes
+            drawAxes();
+
+            // Draw The Curve (1/x)
+            ctx.beginPath();
+            ctx.strokeStyle = "#00d2ff"; // Safe Blue
+            ctx.lineWidth = 4;
+            
+            // We draw the line by looping small steps
+            let startDrawing = false;
+            for(let i = 0.1; i <= 4; i += 0.05) {
+                let plotY = 1 / i;
+                let pos = toScreen(i, plotY);
+                
+                if (!startDrawing) {
+                    ctx.moveTo(pos.x, pos.y);
+                    startDrawing = true;
+                } else {
+                    ctx.lineTo(pos.x, pos.y);
+                }
+            }
+            ctx.stroke();
+
+            // 4. Draw The User Dot
+            let screenPos = toScreen(x, y);
+
+            // Change color if pressure is high
+            let dotColor = y > 5 ? "#f50057" : "#00d2ff"; 
+
+            ctx.beginPath();
+            ctx.arc(screenPos.x, screenPos.y, 12, 0, Math.PI*2);
+            ctx.fillStyle = dotColor;
+            ctx.fill();
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Draw Dashed Lines to Axes (To make it readable)
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]);
+            ctx.strokeStyle = "#aaa";
+            ctx.lineWidth = 1;
+            
+            // Vertical Line down to X
+            const xAxisY = toScreen(0, 0).y;
+            ctx.moveTo(screenPos.x, screenPos.y);
+            ctx.lineTo(screenPos.x, xAxisY);
+            
+            // Horizontal Line across to Y
+            const yAxisX = toScreen(0, 0).x;
+            ctx.moveTo(screenPos.x, screenPos.y);
+            ctx.lineTo(yAxisX, screenPos.y);
+            
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset
+        }
+
+        function drawAxes() {
+            const origin = toScreen(0, 0);
+            const top = toScreen(0, 10);
+            const right = toScreen(4, 0);
+
+            ctx.beginPath();
+            ctx.strokeStyle = "#ddd";
+            ctx.lineWidth = 2;
+
+            // X Axis
+            ctx.moveTo(origin.x, origin.y);
+            ctx.lineTo(right.x, origin.y);
+
+            // Y Axis
+            ctx.moveTo(origin.x, origin.y);
+            ctx.lineTo(origin.x, top.y);
+            
+            ctx.stroke();
+        }
+
+        window.addEventListener('resize', resize);
+        slider.addEventListener('input', (e) => update(parseFloat(e.target.value)));
+        
+        // Init
+        resize();
+
+    </script>
+</body>
+</html>
