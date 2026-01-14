@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Limit Detective</title>
+    <style>
+        /* FABULOUS THEME SETUP */
+        :root {
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --glass: rgba(255, 255, 255, 0.95);
+            --left-color: #f59e0b; /* Orange for Left */
+            --right-color: #3b82f6; /* Blue for Right */
+            --hole-color: #ef4444; /* Red for the Hole */
+            --text-main: #1e293b;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            color: var(--text-main);
+        }
+
+        .card {
+            background: var(--glass);
+            width: 90%;
+            max-width: 600px;
+            padding: 25px;
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        h2 { margin-top: 0; color: #4c1d95; }
+        
+        /* THE GRAPH CONTAINER */
+        .graph-container {
+            position: relative;
+            height: 300px;
+            background: #f8fafc;
+            border-radius: 16px;
+            margin: 20px 0;
+            border: 2px solid #e2e8f0;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* DATA DISPLAY (THE TABLE CONCEPT) */
+        .data-panel {
+            display: flex;
+            justify-content: space-between;
+            background: #e0e7ff;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .data-box {
+            width: 45%;
+        }
+        
+        .big-number {
+            font-size: 1.8rem;
+            display: block;
+        }
+
+        /* STATUS MESSAGE */
+        #status-msg {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            min-height: 1.5em;
+            color: #64748b;
+        }
+
+        /* SLIDER STYLING */
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+            accent-color: #764ba2;
+        }
+
+        .hole-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 3px solid var(--hole-color);
+            border-radius: 50%;
+            background: white;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Limit Detective 🕵️‍♂️</h2>
+        <p>Formula: f(x) = (x² − 4) / (x − 2)</p>
+        
+        <div id="status-msg">Slide to approach the hole!</div>
+
+        <div class="graph-container">
+            <canvas id="limitCanvas"></canvas>
+            <div style="position: absolute; top: 40%; left: 52%; transform: translate(-50%, -50%); color: var(--hole-color); font-weight: bold; pointer-events: none;">
+                HOLE (2, ?)
+            </div>
+        </div>
+
+        <div class="data-panel">
+            <div class="data-box" style="color: var(--left-color);">
+                INPUT (x)
+                <span id="x-val" class="big-number">0.00</span>
+            </div>
+            <div class="data-box" style="color: var(--right-color);">
+                OUTPUT (y)
+                <span id="y-val" class="big-number">0.00</span>
+            </div>
+        </div>
+
+        <label>Move User (x):</label>
+        <input type="range" id="xSlider" min="0" max="4" step="0.01" value="0">
+        
+    </div>
+
+    <script>
+        const canvas = document.getElementById('limitCanvas');
+        const ctx = canvas.getContext('2d');
+        const slider = document.getElementById('xSlider');
+        const xDisplay = document.getElementById('x-val');
+        const yDisplay = document.getElementById('y-val');
+        const statusMsg = document.getElementById('status-msg');
+
+        // Canvas Setup (Making it sharp on high-res screens)
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.offsetWidth;
+            canvas.height = canvas.parentElement.offsetHeight;
+            drawGraph(parseFloat(slider.value));
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // MATHEMATICS
+        function calculateY(x) {
+            // Determine limit proximity
+            if (Math.abs(x - 2) < 0.001) {
+                return null; // The Hole!
+            }
+            return (x * x - 4) / (x - 2);
+        }
+
+        function drawGraph(userX) {
+            const w = canvas.width;
+            const h = canvas.height;
+            
+            // Coordinate System Mapping
+            // We want x=2, y=4 to be roughly in the center
+            // Scale: 50px = 1 unit
+            const scale = 50;
+            const offsetX = w / 2 - (2 * scale); // Shift center to x=2
+            const offsetY = h / 2 + (4 * scale); // Shift center to y=4 (Canvas Y is inverted)
+
+            // Clear Screen
+            ctx.clearRect(0, 0, w, h);
+
+            // 1. Draw Grid/Axes
+            ctx.beginPath();
+            ctx.strokeStyle = "#e2e8f0";
+            ctx.lineWidth = 1;
+            // Draw simplified grid lines could go here
+            ctx.stroke();
+
+            // 2. Draw the Function Line
+            ctx.beginPath();
+            ctx.strokeStyle = "#94a3b8";
+            ctx.lineWidth = 3;
+            // Draw from x=0 to x=4
+            let startX = 0 * scale + offsetX;
+            let startY = - (0 + 2) * scale + offsetY; // y = x + 2
+            let endX = 4 * scale + offsetX;
+            let endY = - (4 + 2) * scale + offsetY;
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            // 3. Draw The HOLE at (2, 4)
+            let holePixelX = 2 * scale + offsetX;
+            let holePixelY = - (4) * scale + offsetY;
+            
+            ctx.beginPath();
+            ctx.arc(holePixelX, holePixelY, 8, 0, 2 * Math.PI);
+            ctx.fillStyle = "white";
+            ctx.fill();
+            ctx.strokeStyle = "#ef4444"; // Red ring
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // 4. Draw The User's Point (The Traveler)
+            let userPixelX = userX * scale + offsetX;
+            let userVal = calculateY(userX);
+            
+            // Decide Color (Left vs Right)
+            let color = (userX < 2) ? "#f59e0b" : "#3b82f6"; // Orange or Blue
+            let isHole = false;
+
+            // Handle the specific Hole case
+            if (Math.abs(userX - 2) < 0.05) {
+                isHole = true;
+                color = "#ef4444"; // Red for danger/undefined
+                statusMsg.innerHTML = "⛔ STOP! This is the Hole (Undefined)! But the limit is 4.";
+                statusMsg.style.color = "#ef4444";
+                yDisplay.innerText = "Undefined";
+                xDisplay.innerText = "2.00";
+            } else {
+                statusMsg.innerHTML = userX < 2 ? "Approaching from <b>LEFT</b>..." : "Approaching from <b>RIGHT</b>...";
+                statusMsg.style.color = "#1e293b";
+                yDisplay.innerText = userVal.toFixed(3);
+                xDisplay.innerText = userX.toFixed(3);
+            }
+
+            // Draw the point
+            if (!isHole) {
+                ctx.beginPath();
+                ctx.arc(userPixelX, - (userVal) * scale + offsetY, 10, 0, 2 * Math.PI);
+                ctx.fillStyle = color;
+                ctx.fill();
+                
+                // Draw dotted line to axis
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(userPixelX, - (userVal) * scale + offsetY);
+                ctx.lineTo(userPixelX, h); // Line down
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+
+        // Init
+        resizeCanvas();
+        
+        // Event Listener
+        slider.addEventListener('input', (e) => {
+            drawGraph(parseFloat(e.target.value));
+        });
+
+    </script>
+</body>
+</html>
