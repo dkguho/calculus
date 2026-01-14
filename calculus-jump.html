@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Limit Updates</title>
+    <style>
+        /* 1. VISUAL THEME */
+        :root {
+            --bg: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+            --card-bg: white;
+            --primary: #6366f1; 
+            --left-color: #d946ef; /* Magenta */
+            --right-color: #0ea5e9; /* Blue */
+            --danger: #ef4444;      /* Red */
+            --text: #1e293b;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 650px;
+            text-align: center;
+        }
+
+        h2 { margin-top: 0; color: var(--text); }
+        p { color: #64748b; margin-bottom: 20px; font-size: 0.9rem; }
+
+        /* 2. LIVE DATA BOXES */
+        .metrics-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            flex: 1;
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 16px;
+            border: 2px solid #e2e8f0;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        /* Active State Animation */
+        .metric-card.active {
+            transform: translateY(-5px);
+            background: #fff;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .metric-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #94a3b8;
+            margin-bottom: 5px;
+            font-weight: 700;
+        }
+
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums; /* Keeps numbers from jittering width */
+        }
+
+        /* 3. GRAPH CONTAINER */
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            margin-bottom: 25px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 4. SLIDER */
+        .slider-container {
+            position: relative;
+            padding: 10px 0;
+        }
+        
+        input[type=range] {
+            width: 100%;
+            height: 8px;
+            background: #cbd5e1;
+            border-radius: 4px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 28px;
+            height: 28px;
+            background: var(--text);
+            border: 4px solid white;
+            border-radius: 50%;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+
+        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.1); }
+
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Real-Time Limit ⚡</h2>
+    <p>Slide to see the Output ($y$) change instantly.</p>
+
+    <div class="metrics-row">
+        <div class="metric-card" id="card-left">
+            <div class="metric-title">Left Approach</div>
+            <div class="metric-value" id="val-left" style="color: var(--left-color);">---</div>
+        </div>
+
+        <div class="metric-card" id="card-center" style="flex: 0.8;">
+            <div class="metric-title">Input (x)</div>
+            <div class="metric-value" id="val-x" style="color: var(--text);">0.00</div>
+        </div>
+
+        <div class="metric-card" id="card-right">
+            <div class="metric-title">Right Approach</div>
+            <div class="metric-value" id="val-right" style="color: var(--right-color);">---</div>
+        </div>
+    </div>
+
+    <div class="canvas-wrapper" id="canvas-container">
+        <canvas id="graphCanvas"></canvas>
+        <div style="position: absolute; top: 10px; right: 10px; color: #cbd5e1; font-size: 0.8rem; font-weight: bold;">f(x)</div>
+    </div>
+
+    <div class="slider-container">
+        <input type="range" id="slider" min="0" max="4" step="0.01" value="0">
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('graphCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvas-container');
+    const slider = document.getElementById('slider');
+
+    // UI Elements
+    const cardLeft = document.getElementById('card-left');
+    const cardRight = document.getElementById('card-right');
+    const valLeft = document.getElementById('val-left');
+    const valRight = document.getElementById('val-right');
+    const valX = document.getElementById('val-x');
+
+    let width, height;
+
+    // --- RESIZE & SCALE ---
+    function resize() {
+        const rect = container.getBoundingClientRect();
+        width = rect.width;
+        height = rect.height;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        ctx.scale(dpr, dpr);
+        update(parseFloat(slider.value));
+    }
+
+    function toScreen(x, y) {
+        const padding = 40;
+        const drawW = width - (padding*2);
+        const drawH = height - (padding*2);
+        // Map x(0-4) and y(0-6.5)
+        const px = padding + (x / 4) * drawW;
+        const py = height - padding - (y / 6.5) * drawH;
+        return {x: px, y: py};
+    }
+
+    // --- MAIN LOGIC ---
+    function update(x) {
+        // 1. CLEAR
+        ctx.clearRect(0, 0, width, height);
+
+        // 2. MATH LOGIC (Equations)
+        // Left Side: y = 0.5x + 2 (Limit is 3)
+        // Right Side: y = 0.5x + 4 (Limit is 5)
+        
+        // Calculate Y based on where we are
+        let y;
+        let onLeft = x < 2;
+        let isHole = Math.abs(x - 2) < 0.05;
+
+        // UI UPDATES (The Real-Time Part)
+        valX.innerText = x.toFixed(2);
+
+        if (isHole) {
+            // IN THE GAP
+            y = null;
+            valLeft.innerText = "3.00";
+            valRight.innerText = "5.00";
+            cardLeft.classList.remove('active');
+            cardRight.classList.remove('active');
+            
+            // Visual alert in boxes
+            valLeft.style.opacity = "0.5";
+            valRight.style.opacity = "0.5";
+            valX.innerText = "HOLE";
+            valX.style.color = "#ef4444";
+        } 
+        else if (onLeft) {
+            // ON LEFT SIDE
+            y = 0.5 * x + 2;
+            
+            // Update Text
+            valLeft.innerText = y.toFixed(2); // <--- UPDATING LIVE
+            valRight.innerText = "Wait";
+            
+            // Styles
+            valLeft.style.opacity = "1";
+            valRight.style.opacity = "0.3";
+            cardLeft.classList.add('active');
+            cardLeft.style.borderColor = "#d946ef";
+            cardRight.classList.remove('active');
+            cardRight.style.borderColor = "#e2e8f0";
+            valX.style.color = "#1e293b";
+        } 
+        else {
+            // ON RIGHT SIDE
+            y = 0.5 * x + 4;
+
+            // Update Text
+            valRight.innerText = y.toFixed(2); // <--- UPDATING LIVE
+            valLeft.innerText = "Wait";
+
+            // Styles
+            valRight.style.opacity = "1";
+            valLeft.style.opacity = "0.3";
+            cardRight.classList.add('active');
+            cardRight.style.borderColor = "#0ea5e9";
+            cardLeft.classList.remove('active');
+            cardLeft.style.borderColor = "#e2e8f0";
+            valX.style.color = "#1e293b";
+        }
+
+        // 3. DRAW STATIC GRAPH LINES
+        
+        // Left Line (Magenta)
+        const lStart = toScreen(0, 2);
+        const lEnd = toScreen(2, 3);
+        ctx.beginPath();
+        ctx.strokeStyle = "#d946ef";
+        ctx.lineWidth = 4;
+        ctx.moveTo(lStart.x, lStart.y);
+        ctx.lineTo(lEnd.x, lEnd.y);
+        ctx.stroke();
+        // Left Hole
+        ctx.beginPath();
+        ctx.arc(lEnd.x, lEnd.y, 6, 0, Math.PI*2);
+        ctx.fillStyle = "white"; 
+        ctx.fill(); 
+        ctx.stroke();
+
+        // Right Line (Blue)
+        const rStart = toScreen(2, 5);
+        const rEnd = toScreen(4, 6);
+        ctx.beginPath();
+        ctx.strokeStyle = "#0ea5e9";
+        ctx.lineWidth = 4;
+        ctx.moveTo(rStart.x, rStart.y);
+        ctx.lineTo(rEnd.x, rEnd.y);
+        ctx.stroke();
+        // Right Hole
+        ctx.beginPath();
+        ctx.arc(rStart.x, rStart.y, 6, 0, Math.PI*2);
+        ctx.fillStyle = "white"; 
+        ctx.fill(); 
+        ctx.stroke();
+
+        // Gap Line (Dashed)
+        ctx.beginPath();
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = "#ef4444";
+        ctx.lineWidth = 1;
+        ctx.moveTo(lEnd.x, lEnd.y);
+        ctx.lineTo(rStart.x, rStart.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 4. DRAW DYNAMIC USER DOT
+        if (y !== null) {
+            const pos = toScreen(x, y);
+            const color = onLeft ? "#d946ef" : "#0ea5e9";
+
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 10, 0, Math.PI*2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 3;
+            // Shadow for flair
+            ctx.shadowColor = "rgba(0,0,0,0.3)";
+            ctx.shadowBlur = 10;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    window.addEventListener('resize', resize);
+    slider.addEventListener('input', (e) => update(parseFloat(e.target.value)));
+    
+    // Init
+    resize();
+
+</script>
+</body>
+</html>
