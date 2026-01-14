@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic Calculus Tree</title>
+    <style>
+        /* 1. SETUP & BACKGROUND */
+        :root {
+            --primary: #4ade80;
+            --dark: #1e293b;
+            --glass: rgba(255, 255, 255, 0.8);
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            transition: background 0.5s ease;
+        }
+
+        /* 2. THE MAIN CARD (Responsive) */
+        .card {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        h2 { color: var(--dark); margin-bottom: 5px; }
+        p { color: #64748b; margin-top: 0; font-size: 0.9rem; }
+
+        /* 3. THE SCENE (Where the tree lives) */
+        .scene {
+            height: 300px;
+            background: rgba(255,255,255,0.5);
+            border-radius: 15px;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            border-bottom: 4px solid #8b5cf6; /* Fun purple ground */
+        }
+
+        /* The Tree Graphic */
+        #tree-svg {
+            width: 100px;
+            /* Important: We scale from the bottom so it grows up */
+            transform-origin: bottom center; 
+            transition: transform 0.1s linear;
+            filter: drop-shadow(0px 10px 5px rgba(0,0,0,0.2));
+        }
+
+        /* 4. DASHBOARD METRICS */
+        .metrics {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+
+        .metric-box {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            width: 45%;
+        }
+
+        .metric-label { font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+        .metric-value { font-size: 1.5rem; font-weight: bold; color: var(--dark); }
+        .unit { font-size: 0.8rem; color: #64748b; }
+
+        /* 5. THE SLIDER (Styling the input) */
+        .slider-container { margin-top: 10px; }
+        
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 10px;
+            background: #e2e8f0;
+            border-radius: 5px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 25px;
+            height: 25px;
+            background: #8b5cf6;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+
+        input[type=range]:active::-webkit-slider-thumb {
+            transform: scale(1.2);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Magic Calculus Tree</h2>
+        <p>Slide to change Time ($t$)</p>
+
+        <div class="scene">
+            <svg id="tree-svg" viewBox="0 0 100 150" xmlns="http://www.w3.org/2000/svg">
+                <rect x="42" y="100" width="16" height="50" rx="2" fill="#8B4513"/>
+                <path d="M50 10 C 20 10, 10 50, 30 70 C 10 90, 30 110, 50 110 C 70 110, 90 90, 70 70 C 90 50, 80 10, 50 10" fill="#22c55e"/>
+            </svg>
+        </div>
+
+        <div class="metrics">
+            <div class="metric-box">
+                <div class="metric-label">Height ($t^2$)</div>
+                <div class="metric-value"><span id="height-display">0</span></div>
+                <div class="unit">Meters</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-label">Speed ($2t$)</div>
+                <div class="metric-value" style="color: #8b5cf6;"><span id="speed-display">0</span></div>
+                <div class="unit">Meters/Sec</div>
+            </div>
+        </div>
+
+        <div class="slider-container">
+            <input type="range" id="slider" min="0" max="10" step="0.1" value="0">
+        </div>
+    </div>
+
+    <script>
+        // Select elements
+        const slider = document.getElementById('slider');
+        const tree = document.getElementById('tree-svg');
+        const heightDisplay = document.getElementById('height-display');
+        const speedDisplay = document.getElementById('speed-display');
+
+        slider.addEventListener('input', (e) => {
+            const time = parseFloat(e.target.value);
+
+            // --- THE CALCULUS PART ---
+            
+            // 1. Height Function: h(t) = t^2
+            // If time is 4, height is 16.
+            const height = (time * time).toFixed(2);
+
+            // 2. Derivative (Speed): h'(t) = 2t
+            // This is the rate of change at this exact moment.
+            const speed = (2 * time).toFixed(2);
+
+            // --- THE VISUAL PART ---
+
+            // Update text numbers
+            heightDisplay.innerText = height;
+            speedDisplay.innerText = speed;
+
+            // Scale the tree visually
+            // We start at scale 0.2 (tiny seed) and grow based on input
+            // Dividing by 4 just keeps it from getting too huge for the screen
+            const scaleFactor = 0.2 + (time / 4); 
+            tree.style.transform = `scale(${scaleFactor})`;
+
+            // Fabulous Background Change based on growth
+            // As time goes up, the background hue rotates!
+            document.body.style.filter = `hue-rotate(${time * 10}deg)`;
+        });
+    </script>
+
+</body>
+</html>
